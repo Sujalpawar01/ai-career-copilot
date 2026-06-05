@@ -1,0 +1,57 @@
+# ========== Python / Backend ==========
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv/
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# ========== Environment Variables ==========
+.env
+.env.local
+.env.production
+.env.*.local
+
+# ========== Node / Frontend ==========
+node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vite/
+*.tsbuildinfo
+
+# ========== ChromaDB ==========
+chroma_db/
+chroma-data/
+
+# ========== Docker ==========
+*.dockerignore
+
+# ========== IDEs ==========
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ========== Uploads ==========
+uploads/
+temp/
+*.pdf
+*.docx
+
+# ========== Misc ==========
+*.bak
+*.tmp
