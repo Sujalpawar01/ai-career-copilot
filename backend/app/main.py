@@ -10,7 +10,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import auth, documents
+from app.api import auth, documents, analysis, chat, interview, cover_letter, email_generator
 from app.config import get_settings
 from app.database.connection import create_tables
 
@@ -110,6 +110,11 @@ async def root() -> dict:
 # ============================================================
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(documents.router, prefix="/api/v1")
+app.include_router(analysis.router, prefix="/api/v1")
+app.include_router(chat.router, prefix="/api/v1")
+app.include_router(interview.router, prefix="/api/v1")
+app.include_router(cover_letter.router, prefix="/api/v1")
+app.include_router(email_generator.router, prefix="/api/v1")
 
 # Future routers will be added here as phases complete:
 # app.include_router(documents.router, prefix="/api/v1")
