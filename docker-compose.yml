@@ -94,6 +94,23 @@ services:
       timeout: 10s
       retries: 3
 
+  # ========================================================
+  # React Frontend
+  # ========================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: career_copilot_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    environment:
+      - VITE_API_URL=http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+
 volumes:
   postgres_data:
     name: career_copilot_postgres_data
