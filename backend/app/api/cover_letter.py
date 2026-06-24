@@ -16,6 +16,11 @@ from app.rag.rag_pipeline import run_cover_letter_generator
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cover-letter", tags=["Cover Letter"])
 
+_BILLING_HINT = (
+    " Please check your OpenAI billing at https://platform.openai.com/settings/billing, "
+    "then re-upload your files."
+)
+
 
 @router.post(
     "/generate",
@@ -36,10 +41,12 @@ async def generate_cover_letter(
         select(Resume).where(Resume.id == payload.resume_id, Resume.user_id == current_user.id)
     )
     resume = resume_result.scalar_one_or_none()
-    if not resume or not resume.chroma_collection_id:
+    if not resume:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found.")
+    if not resume.chroma_collection_id:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Resume not found or not indexed.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Resume is not indexed yet.{_BILLING_HINT}",
         )
 
     # Validate JD
@@ -50,10 +57,12 @@ async def generate_cover_letter(
         )
     )
     jd = jd_result.scalar_one_or_none()
-    if not jd or not jd.chroma_collection_id:
+    if not jd:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job description not found.")
+    if not jd.chroma_collection_id:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Job description not found or not indexed.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Job description is not indexed yet.{_BILLING_HINT}",
         )
 
     try:
@@ -67,7 +76,7 @@ async def generate_cover_letter(
         logger.error(f"Cover letter generation failed: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Cover letter generation failed: {str(e)}",
+            detail=f"Cover letter generation failed: {str(e)}.{_BILLING_HINT}",
         )
 
     return CoverLetterResponse(**result)
