@@ -38,10 +38,12 @@ async def generate_interview_questions(
         select(Resume).where(Resume.id == payload.resume_id, Resume.user_id == current_user.id)
     )
     resume = resume_result.scalar_one_or_none()
-    if not resume or not resume.chroma_collection_id:
+    if not resume:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found.")
+    if not resume.chroma_collection_id:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Resume not found or not yet indexed. Please upload and wait for processing.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Resume is not indexed yet. This usually means the OpenAI API key has no credits. Please check your OpenAI billing at platform.openai.com/settings/billing, then re-upload your resume.",
         )
 
     # Validate JD
@@ -52,10 +54,12 @@ async def generate_interview_questions(
         )
     )
     jd = jd_result.scalar_one_or_none()
-    if not jd or not jd.chroma_collection_id:
+    if not jd:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job description not found.")
+    if not jd.chroma_collection_id:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Job description not found or not yet indexed.",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Job description is not indexed yet. Please check your OpenAI billing, then re-submit your job description.",
         )
 
     try:
