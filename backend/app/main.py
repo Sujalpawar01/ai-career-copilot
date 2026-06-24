@@ -14,10 +14,15 @@ from app.api import auth, documents, analysis, chat, interview, cover_letter, em
 from app.config import get_settings
 from app.database.connection import create_tables
 
-# Configure logging
+import io
+import sys
+
+# Configure logging — force UTF-8 on Windows to avoid emoji encoding crashes
+_stream = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace") if hasattr(sys.stdout, "buffer") else sys.stdout
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    handlers=[logging.StreamHandler(_stream)],
 )
 logger = logging.getLogger(__name__)
 
