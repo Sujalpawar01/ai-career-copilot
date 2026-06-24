@@ -3,7 +3,6 @@ Match Analysis API routes.
 Compares a resume against a job description and returns skill gap analysis.
 """
 import logging
-import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -15,35 +14,53 @@ from app.database.models import JobDescription, Resume, User
 from app.models.schemas import MatchAnalysisRequest, MatchAnalysisResponse
 from app.rag.rag_pipeline import run_match_analysis
 from app.services.ingestion_service import ingest_job_description, ingest_resume
-from app.services.document_parser import parse_plain_text
-from app.rag.text_splitter import split_documents
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/analyze", tags=["Analysis"])
 
+_BILLING_HINT = (
+    " This usually means your OpenAI API key has no credits. "
+    "Add billing at https://platform.openai.com/settings/billing, then re-upload your files."
+)
+
 
 async def _ensure_resume_ingested(resume: Resume, db: AsyncSession) -> str:
-    """Ensure a resume has been ingested into ChromaDB. Ingest if not."""
+    """Ensure a resume has been ingested into ChromaDB. Ingest on-demand if not."""
     if resume.chroma_collection_id:
         return resume.chroma_collection_id
 
-    # Re-ingest from parsed text
     if not resume.parsed_text:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Resume has no parsed text. Please re-upload.",
+            detail="Resume has no parsed text. Please re-upload the file.",
         )
 
-    from langchain.schema import Document
-    docs = [Document(page_content=resume.parsed_text, metadata={"source": resume.filename})]
-    return await ingest_resume(resume, docs, db)
+    # Attempt on-demand ingestion
+    try:
+        from langchain.schema import Document
+        docs = [Document(page_content=resume.parsed_text, metadata={"source": resume.filename})]
+        collection_id = await ingest_resume(resume, docs, db)
+        return collection_id
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Resume indexing failed: {str(e)}.{_BILLING_HINT}",
+        )
 
 
 async def _ensure_jd_ingested(jd: JobDescription, db: AsyncSession) -> str:
-    """Ensure a JD has been ingested into ChromaDB. Ingest if not."""
+    """Ensure a JD has been ingested into ChromaDB. Ingest on-demand if not."""
     if jd.chroma_collection_id:
         return jd.chroma_collection_id
-    return await ingest_job_description(jd, db)
+
+    try:
+        collection_id = await ingest_job_description(jd, db)
+        return collection_id
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Job description indexing failed: {str(e)}.{_BILLING_HINT}",
+        )
 
 
 @router.post(
@@ -66,7 +83,7 @@ async def analyze_match(
     )
     resume = resume_result.scalar_one_or_none()
     if not resume:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found.")
 
     # Fetch and validate JD
     jd_result = await db.execute(
@@ -77,9 +94,9 @@ async def analyze_match(
     )
     jd = jd_result.scalar_one_or_none()
     if not jd:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job description not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job description not found.")
 
-    # Ensure both are in ChromaDB
+    # Ensure both are indexed in ChromaDB (auto-ingest if needed)
     resume_collection = await _ensure_resume_ingested(resume, db)
     jd_collection = await _ensure_jd_ingested(jd, db)
 
@@ -90,10 +107,11 @@ async def analyze_match(
         logger.error(f"Match analysis failed: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Analysis failed: {str(e)}",
+            detail=f"Analysis failed: {str(e)}.{_BILLING_HINT}",
         )
 
     # Update match score in DB
     jd.match_score = result.get("match_score", 0.0)
+    await db.commit()
 
     return MatchAnalysisResponse(**result)
