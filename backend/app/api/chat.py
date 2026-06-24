@@ -119,10 +119,19 @@ async def send_message(
             chat_history=chat_history,
         )
     except Exception as e:
+        err_str = str(e)
         logger.error(f"RAG chat failed: {e}", exc_info=True)
+        if "insufficient_quota" in err_str or "429" in err_str:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=(
+                    "OpenAI API quota exceeded. Your API key has no remaining credits. "
+                    "Please add billing at https://platform.openai.com/settings/billing and try again."
+                ),
+            )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Chat failed: {str(e)}",
+            detail=f"Chat failed: {err_str}",
         )
 
     # Save assistant message
