@@ -26,6 +26,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
 
+def _uuid_str(value: uuid.UUID | str | None) -> str | None:
+    return str(value) if value is not None else None
+
+
 @router.post(
     "/message",
     response_model=ChatMessageResponse,
@@ -42,11 +46,15 @@ async def send_message(
     - Retrieves relevant resume/JD chunks for grounded answers
     - Returns response with source citations
     """
+    session_id = _uuid_str(payload.session_id)
+    resume_id = _uuid_str(payload.resume_id)
+    jd_id = _uuid_str(payload.job_description_id)
+
     # Get or create chat session
-    if payload.session_id:
+    if session_id:
         session_result = await db.execute(
             select(ChatSession).where(
-                ChatSession.id == payload.session_id,
+                ChatSession.id == session_id,
                 ChatSession.user_id == current_user.id,
             )
         )
@@ -56,8 +64,8 @@ async def send_message(
     else:
         session = ChatSession(
             user_id=current_user.id,
-            resume_id=payload.resume_id,
-            job_description_id=payload.job_description_id,
+            resume_id=resume_id,
+            job_description_id=jd_id,
             title=payload.message[:50] + "..." if len(payload.message) > 50 else payload.message,
         )
         db.add(session)
@@ -79,8 +87,8 @@ async def send_message(
     resume_collection = None
     jd_collection = None
 
-    resume_id = payload.resume_id or session.resume_id
-    jd_id = payload.job_description_id or session.job_description_id
+    resume_id = resume_id or session.resume_id
+    jd_id = jd_id or session.job_description_id
 
     if resume_id:
         resume_result = await db.execute(
@@ -193,9 +201,10 @@ async def get_chat_history(
     db: AsyncSession = Depends(get_db),
 ) -> ChatHistoryResponse:
     """Retrieve full message history for a chat session."""
+    session_id_str = str(session_id)
     session_result = await db.execute(
         select(ChatSession).where(
-            ChatSession.id == session_id,
+            ChatSession.id == session_id_str,
             ChatSession.user_id == current_user.id,
         )
     )
@@ -205,7 +214,7 @@ async def get_chat_history(
 
     messages_result = await db.execute(
         select(ChatMessage)
-        .where(ChatMessage.session_id == session_id)
+        .where(ChatMessage.session_id == session_id_str)
         .order_by(ChatMessage.created_at)
     )
     messages = messages_result.scalars().all()

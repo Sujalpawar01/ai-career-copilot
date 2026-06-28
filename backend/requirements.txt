@@ -20,6 +20,8 @@ bcrypt==4.2.1
 # ========== LangChain (Python 3.13-compatible loose pins) ==========
 langchain>=0.3.11
 langchain-openai>=0.2.12
+langchain-core>=0.3.85,<1.0.0
+langchain-google-genai>=2.0.0,<3.0.0
 langchain-community>=0.3.11
 langchain-chroma>=0.2.0
 langchain-text-splitters>=0.3.3

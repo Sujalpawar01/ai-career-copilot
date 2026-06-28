@@ -20,13 +20,18 @@ class Settings(BaseSettings):
     app_port: int = 8000
     allowed_origins: str = "http://localhost:5173,http://localhost:3000"
 
-    # ----- OpenAI -----
-    openai_api_key: str
+    # ----- Google Gemini -----
+    google_api_key: str = ""
+    gemini_model: str = "gemini-2.0-flash"
+    gemini_embedding_model: str = "models/text-embedding-004"
+
+    # ----- OpenAI (kept as optional fallback) -----
+    openai_api_key: str = ""
     openai_model: str = "gpt-4o"
     openai_embedding_model: str = "text-embedding-3-small"
 
     # ----- Database -----
-    database_url: str = "postgresql+asyncpg://postgres:password@localhost:5432/career_copilot"
+    database_url: str = "sqlite+aiosqlite:///./career_copilot.db"
     postgres_user: str = "postgres"
     postgres_password: str = "password"
     postgres_db: str = "career_copilot"
@@ -50,6 +55,11 @@ class Settings(BaseSettings):
     @property
     def allowed_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.allowed_origins.split(",")]
+
+    @property
+    def active_llm_provider(self) -> str:
+        """Returns 'gemini' if Google key is set, else 'openai'."""
+        return "gemini" if self.google_api_key else "openai"
 
 
 @lru_cache

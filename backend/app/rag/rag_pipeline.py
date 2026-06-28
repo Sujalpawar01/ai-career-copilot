@@ -1,13 +1,13 @@
 """
 LangChain RAG pipeline — the core AI engine of the Career Copilot.
 Handles retrieval, prompt construction, LLM invocation, and source citation.
+Supports Google Gemini (primary) and OpenAI GPT-4o (fallback).
 """
 import json
 import logging
 from typing import Any
 
 from langchain.schema import Document
-from langchain_openai import ChatOpenAI
 
 from app.config import get_settings
 from app.rag.prompts import (
@@ -25,14 +25,26 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
-def get_llm(temperature: float = 0.3) -> ChatOpenAI:
-    """Return a configured OpenAI GPT-4o chat model."""
+def get_llm(temperature: float = 0.3):
+    """Return Gemini or OpenAI LLM depending on which API key is configured."""
+    if settings.google_api_key:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        return ChatGoogleGenerativeAI(
+            model=settings.gemini_model,
+            temperature=temperature,
+            google_api_key=settings.google_api_key,
+            max_output_tokens=4096,
+            convert_system_message_to_human=True,
+        )
+    # Fallback: OpenAI
+    from langchain_openai import ChatOpenAI
     return ChatOpenAI(
         model=settings.openai_model,
         temperature=temperature,
         openai_api_key=settings.openai_api_key,
         max_tokens=4096,
     )
+
 
 
 def _format_docs(docs: list[Document]) -> str:
