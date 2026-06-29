@@ -54,7 +54,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
 app = FastAPI(
     title="AI Career Copilot API",
     description=(
-        "Production-ready AI Career Assistant powered by LangChain RAG + OpenAI GPT-4o. "
+        "Production-ready AI Career Assistant powered by LangChain RAG + Google Gemini. "
         "Features: resume analysis, job matching, interview prep, cover letter generation."
     ),
     version="1.0.0",

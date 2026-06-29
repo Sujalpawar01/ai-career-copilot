@@ -130,12 +130,12 @@ async def send_message(
     except Exception as e:
         err_str = str(e)
         logger.error(f"RAG chat failed: {e}", exc_info=True)
-        if "insufficient_quota" in err_str or "429" in err_str:
+        if "insufficient_quota" in err_str or "429" in err_str or "quota" in err_str.lower():
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail=(
-                    "OpenAI API quota exceeded. Your API key has no remaining credits. "
-                    "Please add billing at https://platform.openai.com/settings/billing and try again."
+                    "Gemini API quota exceeded or unavailable. "
+                    "Please check your Gemini API key/quota and try again."
                 ),
             )
         raise HTTPException(

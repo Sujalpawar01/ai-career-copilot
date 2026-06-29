@@ -13,18 +13,49 @@ from app.database.connection import get_db
 from app.database.models import JobDescription, Resume, User
 from app.models.schemas import CoverLetterRequest, CoverLetterResponse
 from app.rag.rag_pipeline import run_cover_letter_generator
+from app.services.ingestion_service import ingest_job_description, ingest_resume
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cover-letter", tags=["Cover Letter"])
 
 _BILLING_HINT = (
-    " Please check your OpenAI billing at https://platform.openai.com/settings/billing, "
-    "then re-upload your files."
+    " Please check your Gemini API key/quota, then try again."
 )
 
 
 def _uuid_str(value: uuid.UUID | str | None) -> str | None:
     return str(value) if value is not None else None
+
+
+async def _ensure_resume_ingested(resume: Resume, db: AsyncSession) -> str:
+    if resume.chroma_collection_id:
+        return resume.chroma_collection_id
+    if not resume.parsed_text:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Resume has no parsed text. Please re-upload the file.",
+        )
+    try:
+        from langchain.schema import Document
+        docs = [Document(page_content=resume.parsed_text, metadata={"source": resume.filename})]
+        return await ingest_resume(resume, docs, db)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Resume indexing with Gemini failed: {str(e)}.{_BILLING_HINT}",
+        )
+
+
+async def _ensure_jd_ingested(jd: JobDescription, db: AsyncSession) -> str:
+    if jd.chroma_collection_id:
+        return jd.chroma_collection_id
+    try:
+        return await ingest_job_description(jd, db)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Job description indexing with Gemini failed: {str(e)}.{_BILLING_HINT}",
+        )
 
 
 @router.post(
@@ -51,11 +82,6 @@ async def generate_cover_letter(
     resume = resume_result.scalar_one_or_none()
     if not resume:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found.")
-    if not resume.chroma_collection_id:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Resume is not indexed yet.{_BILLING_HINT}",
-        )
 
     # Validate JD
     jd_result = await db.execute(
@@ -67,16 +93,13 @@ async def generate_cover_letter(
     jd = jd_result.scalar_one_or_none()
     if not jd:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job description not found.")
-    if not jd.chroma_collection_id:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Job description is not indexed yet.{_BILLING_HINT}",
-        )
+    resume_collection = await _ensure_resume_ingested(resume, db)
+    jd_collection = await _ensure_jd_ingested(jd, db)
 
     try:
         result = await run_cover_letter_generator(
-            resume_collection=resume.chroma_collection_id,
-            jd_collection=jd.chroma_collection_id,
+            resume_collection=resume_collection,
+            jd_collection=jd_collection,
             tone=payload.tone,
             additional_context=payload.additional_context or "",
         )

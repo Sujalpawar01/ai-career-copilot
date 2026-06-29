@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/analyze", tags=["Analysis"])
 
 _BILLING_HINT = (
-    " This usually means your OpenAI API key has no credits. "
-    "Add billing at https://platform.openai.com/settings/billing, then re-upload your files."
+    " This usually means your Gemini API key has no quota or is invalid. "
+    "Check your Gemini API key/quota, then try again."
 )
 
 

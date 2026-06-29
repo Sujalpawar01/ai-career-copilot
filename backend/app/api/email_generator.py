@@ -18,18 +18,49 @@ from app.rag.rag_pipeline import (
     run_followup_email_generator,
     run_linkedin_message_generator,
 )
+from app.services.ingestion_service import ingest_job_description, ingest_resume
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/email", tags=["Email Generator"])
 
 _BILLING_HINT = (
-    " Please check your OpenAI billing at https://platform.openai.com/settings/billing, "
-    "then re-upload your resume."
+    " Please check your Gemini API key/quota, then try again."
 )
 
 
 def _uuid_str(value: uuid.UUID | str | None) -> str | None:
     return str(value) if value is not None else None
+
+
+async def _ensure_resume_ingested(resume: Resume, db: AsyncSession) -> str:
+    if resume.chroma_collection_id:
+        return resume.chroma_collection_id
+    if not resume.parsed_text:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Resume has no parsed text. Please re-upload the file.",
+        )
+    try:
+        from langchain.schema import Document
+        docs = [Document(page_content=resume.parsed_text, metadata={"source": resume.filename})]
+        return await ingest_resume(resume, docs, db)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Resume indexing with Gemini failed: {str(e)}.{_BILLING_HINT}",
+        )
+
+
+async def _ensure_jd_ingested(jd: JobDescription, db: AsyncSession) -> str:
+    if jd.chroma_collection_id:
+        return jd.chroma_collection_id
+    try:
+        return await ingest_job_description(jd, db)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Job description indexing with Gemini failed: {str(e)}.{_BILLING_HINT}",
+        )
 
 
 async def _get_collections(
@@ -47,11 +78,7 @@ async def _get_collections(
     resume = resume_result.scalar_one_or_none()
     if not resume:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found.")
-    if not resume.chroma_collection_id:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Resume is not indexed yet.{_BILLING_HINT}",
-        )
+    resume_collection = await _ensure_resume_ingested(resume, db)
 
     jd_collection = None
     if job_description_id:
@@ -63,9 +90,9 @@ async def _get_collections(
         )
         jd = jd_result.scalar_one_or_none()
         if jd:
-            jd_collection = jd.chroma_collection_id
+            jd_collection = await _ensure_jd_ingested(jd, db)
 
-    return resume.chroma_collection_id, jd_collection
+    return resume_collection, jd_collection
 
 
 @router.post("/cold", response_model=EmailResponse, summary="Generate a cold outreach email")
