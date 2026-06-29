@@ -2,6 +2,7 @@
 Cover Letter generation API routes.
 """
 import logging
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -22,6 +23,10 @@ _BILLING_HINT = (
 )
 
 
+def _uuid_str(value: uuid.UUID | str | None) -> str | None:
+    return str(value) if value is not None else None
+
+
 @router.post(
     "/generate",
     response_model=CoverLetterResponse,
@@ -36,9 +41,12 @@ async def generate_cover_letter(
     Generate a personalized cover letter based on resume content and job description.
     Supports professional, enthusiastic, and concise tones.
     """
+    resume_id = _uuid_str(payload.resume_id)
+    job_description_id = _uuid_str(payload.job_description_id)
+
     # Validate resume
     resume_result = await db.execute(
-        select(Resume).where(Resume.id == payload.resume_id, Resume.user_id == current_user.id)
+        select(Resume).where(Resume.id == resume_id, Resume.user_id == current_user.id)
     )
     resume = resume_result.scalar_one_or_none()
     if not resume:
@@ -52,7 +60,7 @@ async def generate_cover_letter(
     # Validate JD
     jd_result = await db.execute(
         select(JobDescription).where(
-            JobDescription.id == payload.job_description_id,
+            JobDescription.id == job_description_id,
             JobDescription.user_id == current_user.id,
         )
     )

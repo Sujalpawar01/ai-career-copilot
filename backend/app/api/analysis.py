@@ -3,6 +3,7 @@ Match Analysis API routes.
 Compares a resume against a job description and returns skill gap analysis.
 """
 import logging
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -22,6 +23,10 @@ _BILLING_HINT = (
     " This usually means your OpenAI API key has no credits. "
     "Add billing at https://platform.openai.com/settings/billing, then re-upload your files."
 )
+
+
+def _uuid_str(value: uuid.UUID | str | None) -> str | None:
+    return str(value) if value is not None else None
 
 
 async def _ensure_resume_ingested(resume: Resume, db: AsyncSession) -> str:
@@ -77,9 +82,12 @@ async def analyze_match(
     Perform a comprehensive match analysis between a resume and job description.
     Returns: match score, matched skills, missing skills, and improvement suggestions.
     """
+    resume_id = _uuid_str(payload.resume_id)
+    job_description_id = _uuid_str(payload.job_description_id)
+
     # Fetch and validate resume
     resume_result = await db.execute(
-        select(Resume).where(Resume.id == payload.resume_id, Resume.user_id == current_user.id)
+        select(Resume).where(Resume.id == resume_id, Resume.user_id == current_user.id)
     )
     resume = resume_result.scalar_one_or_none()
     if not resume:
@@ -88,7 +96,7 @@ async def analyze_match(
     # Fetch and validate JD
     jd_result = await db.execute(
         select(JobDescription).where(
-            JobDescription.id == payload.job_description_id,
+            JobDescription.id == job_description_id,
             JobDescription.user_id == current_user.id,
         )
     )
