@@ -117,6 +117,7 @@ async def send_message(
     )
     db.add(user_message)
     await db.flush()
+    await db.commit()
 
     # Run RAG pipeline
     try:
